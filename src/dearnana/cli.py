@@ -1,6 +1,7 @@
 """DearNana CLI — find and rank nursing homes."""
 
 import os
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -230,7 +231,8 @@ def main(address: str, budget: float, condition: str, radius: float, top_n: int,
     reports_dir = _reports_dir()
     reports_dir.mkdir(parents=True, exist_ok=True)
     timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
-    city = ranked[0].facility.city.lower().replace(" ", "_") if ranked else "unknown"
+    # City comes from external CMS data — restrict to a safe filename charset
+    city = re.sub(r"[^a-z0-9_-]", "_", ranked[0].facility.city.lower().replace(" ", "_")) or "unknown"
     report_path = reports_dir / f"dearnana_{city}_{timestamp}.md"
     report_path.write_text("\n".join(report_lines))
     click.echo(f"\nReport saved to: {report_path}")

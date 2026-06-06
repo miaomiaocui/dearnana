@@ -4,6 +4,8 @@ import httpx
 import pytest
 
 from dearnana.cms_client import (
+    _cache_path,
+    _clean_text,
     _get_json,
     _parse_facility,
     _parse_state_rows,
@@ -126,3 +128,29 @@ class TestCache:
         assert _read_cache("missing") is None
         _write_cache("key", [{"a": 1}])
         assert _read_cache("key") == [{"a": 1}]
+
+    def test_cache_path_traversal_blocked(self, tmp_path, monkeypatch):
+        """A hostile CCN must not produce a path outside the cache dir."""
+        monkeypatch.setattr("dearnana.cms_client.CACHE_DIR", str(tmp_path))
+        hostile = "deficiencies_../../../../etc/passwd"
+        path = _cache_path(hostile)
+        assert path.resolve().parent == tmp_path.resolve()
+        assert ".." not in path.name
+        assert "/" not in path.name
+
+
+class TestCleanText:
+    def test_strips_control_chars(self):
+        assert _clean_text("Evil\x1b[31mName\x00Home") == "Evil[31mNameHome"
+
+    def test_none_and_empty(self):
+        assert _clean_text(None) == ""
+        assert _clean_text("") == ""
+
+    def test_normal_text_unchanged(self):
+        assert _clean_text("Covenant Shores Health Center") == "Covenant Shores Health Center"
+
+    def test_parse_facility_cleans_name(self):
+        f = _parse_facility(_provider_row(provider_name="Bad\x1b]0;pwned\x07 Home"))
+        assert "\x1b" not in f.name
+        assert "\x07" not in f.name

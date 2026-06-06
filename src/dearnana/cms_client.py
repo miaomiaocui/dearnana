@@ -1,6 +1,7 @@
 """Client for CMS Provider Data Catalog API."""
 
 import json
+import re
 import time
 from concurrent.futures import ThreadPoolExecutor
 from pathlib import Path
@@ -31,9 +32,14 @@ _RETRY_BACKOFF_SECONDS = 1.0
 
 
 def _cache_path(key: str) -> Path:
+    # Cache keys embed externally-sourced values (CCNs, state codes) that may
+    # be caller-supplied (e.g. a web backend passing user input to
+    # fetch_*_by_ccn). Restrict to a safe charset so a hostile value can
+    # never traverse outside the cache directory.
+    safe_key = re.sub(r"[^A-Za-z0-9_-]", "_", key)
     cache_dir = Path(CACHE_DIR).expanduser()
     cache_dir.mkdir(parents=True, exist_ok=True)
-    return cache_dir / f"{key}.json"
+    return cache_dir / f"{safe_key}.json"
 
 
 def _read_cache(key: str) -> list[dict] | None:
@@ -49,6 +55,17 @@ def _read_cache(key: str) -> list[dict] | None:
 def _write_cache(key: str, data: list[dict]) -> None:
     path = _cache_path(key)
     path.write_text(json.dumps(data))
+
+
+def _clean_text(val: str | None) -> str:
+    """Strip control characters from externally-sourced text.
+
+    CMS strings end up in terminal output, markdown reports, and LLM
+    prompts; control characters could smuggle ANSI escape sequences.
+    """
+    if not val:
+        return ""
+    return re.sub(r"[\x00-\x1f\x7f]", "", val)
 
 
 def _safe_float(val: str | None, default: float = 0.0) -> float:
@@ -119,12 +136,23 @@ def _get_json(client: httpx.Client, url: str, params: dict) -> dict:
     )
 
 
-def _fetch_all_pages(client: httpx.Client, dataset: str, conditions: dict, limit: int = 500) -> list[dict]:
-    """Paginate through a CMS datastore query with the given conditions."""
+def _fetch_all_pages(
+    client: httpx.Client,
+    dataset: str,
+    conditions: dict,
+    limit: int = 500,
+    max_pages: int = 200,
+) -> list[dict]:
+    """Paginate through a CMS datastore query with the given conditions.
+
+    max_pages bounds the loop so a misbehaving endpoint can't make us
+    fetch forever (200 pages x 500 rows covers every per-state dataset
+    with a wide margin).
+    """
     url = f"{CMS_API_BASE}/{dataset}/0"
     all_rows: list[dict] = []
     offset = 0
-    while True:
+    for _ in range(max_pages):
         params = {"limit": limit, "offset": offset, **conditions}
         data = _get_json(client, url, params)
         results = data.get("results", [])
@@ -163,16 +191,16 @@ def _parse_facility(row: dict) -> Facility | None:
         return None
 
     return Facility(
-        ccn=row.get("cms_certification_number_ccn", ""),
-        name=row.get("provider_name", ""),
-        address=row.get("provider_address", ""),
-        city=row.get("citytown", ""),
-        state=row.get("state", ""),
-        zip_code=row.get("zip_code", ""),
+        ccn=_clean_text(row.get("cms_certification_number_ccn")),
+        name=_clean_text(row.get("provider_name")),
+        address=_clean_text(row.get("provider_address")),
+        city=_clean_text(row.get("citytown")),
+        state=_clean_text(row.get("state")),
+        zip_code=_clean_text(row.get("zip_code")),
         latitude=lat,
         longitude=lng,
-        phone=row.get("telephone_number", ""),
-        ownership_type=row.get("ownership_type", ""),
+        phone=_clean_text(row.get("telephone_number")),
+        ownership_type=_clean_text(row.get("ownership_type")),
         number_of_beds=_safe_int(row.get("number_of_certified_beds")),
         average_residents_per_day=_safe_float(row.get("average_number_of_residents_per_day")),
         overall_rating=_safe_int(row.get("overall_rating")),
@@ -191,12 +219,12 @@ def _parse_facility(row: dict) -> Facility | None:
         total_fines_dollars=_safe_float(row.get("total_amount_of_fines_in_dollars")),
         number_of_penalties=_safe_int(row.get("total_number_of_penalties")),
         abuse_icon=row.get("abuse_icon", "N") == "Y",
-        sprinkler_systems=row.get("automatic_sprinkler_systems_in_all_required_areas", ""),
+        sprinkler_systems=_clean_text(row.get("automatic_sprinkler_systems_in_all_required_areas")),
         in_hospital=row.get("provider_resides_in_hospital", "N") == "Y",
         continuing_care=row.get("continuing_care_retirement_community", "N") == "Y",
-        special_focus_status=row.get("special_focus_status", ""),
-        chain_name=row.get("chain_name", "") or "",
-        chain_id=row.get("chain_id", "") or "",
+        special_focus_status=_clean_text(row.get("special_focus_status")),
+        chain_name=_clean_text(row.get("chain_name")),
+        chain_id=_clean_text(row.get("chain_id")),
         chain_facility_count=_safe_int_or_none(row.get("number_of_facilities_in_chain")),
         chain_avg_overall=_safe_float_or_none(row.get("chain_average_overall_5star_rating")),
         chain_avg_health_inspection=_safe_float_or_none(
@@ -293,12 +321,12 @@ def _fetch_by_ccn_cached(client: httpx.Client, dataset: str, cache_prefix: str, 
 def _map_deficiencies(rows: list[dict]) -> list[dict]:
     return [
         {
-            "date": r.get("survey_date", ""),
-            "category": r.get("deficiency_category", ""),
-            "description": r.get("deficiency_description", ""),
-            "severity": r.get("scope_severity_code", ""),
-            "corrected": r.get("deficiency_corrected", ""),
-            "correction_date": r.get("correction_date", ""),
+            "date": _clean_text(r.get("survey_date")),
+            "category": _clean_text(r.get("deficiency_category")),
+            "description": _clean_text(r.get("deficiency_description")),
+            "severity": _clean_text(r.get("scope_severity_code")),
+            "corrected": _clean_text(r.get("deficiency_corrected")),
+            "correction_date": _clean_text(r.get("correction_date")),
         }
         for r in rows
     ]
@@ -319,11 +347,11 @@ def _map_penalties(rows: list[dict]) -> list[dict]:
 def _map_ownership(rows: list[dict]) -> list[dict]:
     return [
         {
-            "owner_name": r.get("owner_name", ""),
-            "owner_type": r.get("owner_type", ""),
-            "role": r.get("role_played_by_owner_or_manager_in_facility", ""),
-            "ownership_percentage": r.get("ownership_percentage", ""),
-            "association_date": r.get("association_date", ""),
+            "owner_name": _clean_text(r.get("owner_name")),
+            "owner_type": _clean_text(r.get("owner_type")),
+            "role": _clean_text(r.get("role_played_by_owner_or_manager_in_facility")),
+            "ownership_percentage": _clean_text(r.get("ownership_percentage")),
+            "association_date": _clean_text(r.get("association_date")),
         }
         for r in rows
     ]
