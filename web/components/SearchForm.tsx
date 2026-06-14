@@ -26,7 +26,7 @@ export default function SearchForm({
   onSearch: (p: SearchPayload) => void;
   loading: boolean;
 }) {
-  const [zip, setZip] = useState("");
+  const [zip, setZip] = useState("95113"); // pre-fill: downtown San Jose, CA
   const [budget, setBudget] = useState("8000");
   const [radius, setRadius] = useState("25");
   const [topN, setTopN] = useState("5");
@@ -68,7 +68,7 @@ export default function SearchForm({
             inputMode="numeric"
             pattern="\d{5}"
             maxLength={5}
-            placeholder="e.g. 94403"
+            placeholder="e.g. 95113"
             value={zip}
             onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
             required

@@ -70,13 +70,18 @@ export default function Home() {
         data = null;
       }
       if (!resp.ok || !data) {
-        const timedOut = resp.status === 504 || resp.status === 502 || data === null;
-        throw new Error(
-          (data && "error" in data && data.error) ||
-            (timedOut
-              ? "That search took too long — the first lookup for a large state can be slow. Please try again; the next attempt is usually much faster."
-              : `Search failed (${resp.status}).`),
-        );
+        const friendly = data && "error" in data ? data.error : null;
+        let msg: string;
+        if (friendly) {
+          msg = friendly;
+        } else if (resp.status === 504 || resp.status === 502) {
+          msg = "The search timed out on the server (it took too long to fetch this state's data). We're working on making large states faster.";
+        } else if (resp.status === 404) {
+          msg = "The search service couldn't be reached (404) — the deployment may still be building. Try again in a minute.";
+        } else {
+          msg = `The search failed (HTTP ${resp.status}). This is a server-side error, not your search. Please try again shortly.`;
+        }
+        throw new Error(msg);
       }
       setResult(data as SearchResult);
     } catch (e) {
@@ -96,9 +101,7 @@ export default function Home() {
           <span className="brand-mark">DearNana</span>
           <span className="brand-tag">Public data · no ads · no referral fees</span>
         </div>
-        <h1>
-          Find a nursing home you can <em>trust</em>.
-        </h1>
+        <h1>Find a nursing home.</h1>
         <p className="lede">
           We rank every Medicare &amp; Medicaid certified nursing home near you on objective CMS quality data —
           personalized to your loved one&apos;s needs. Free, and it works entirely without AI.
