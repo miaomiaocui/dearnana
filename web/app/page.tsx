@@ -60,8 +60,24 @@ export default function Home() {
         headers: { "content-type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const data = await resp.json();
-      if (!resp.ok) throw new Error(data?.error || "Search failed.");
+      // The server may return a non-JSON page on a platform timeout/crash —
+      // read text first so we never throw an opaque "Unexpected token" error.
+      const raw = await resp.text();
+      let data: SearchResult | { error?: string } | null = null;
+      try {
+        data = raw ? JSON.parse(raw) : null;
+      } catch {
+        data = null;
+      }
+      if (!resp.ok || !data) {
+        const timedOut = resp.status === 504 || resp.status === 502 || data === null;
+        throw new Error(
+          (data && "error" in data && data.error) ||
+            (timedOut
+              ? "That search took too long — the first lookup for a large state can be slow. Please try again; the next attempt is usually much faster."
+              : `Search failed (${resp.status}).`),
+        );
+      }
       setResult(data as SearchResult);
     } catch (e) {
       setError(e instanceof Error ? e.message : "Something went wrong.");

@@ -8,6 +8,7 @@ user's API key — the browser sends that prompt to Anthropic directly.
 
 import json
 import os
+from concurrent.futures import ThreadPoolExecutor
 
 # Vercel's home dir is read-only; point the library's cache at a writable path
 # before importing dearnana (config reads DEARNANA_CACHE_DIR at import time).
@@ -106,11 +107,26 @@ def run_search(payload: dict) -> dict:
     profile = _build_profile(needs, condition_text)
     condition = condition_text.strip() or profile.summary
 
-    # 3. Fetch + filter
-    try:
-        result = fetch_state_facilities(state)
-    except DataFetchError as e:
-        raise SearchError(502, str(e))
+    # 3 + 4. Fetch the two independent state-wide datasets concurrently — the
+    # provider list and (when needed) the MDS quality measures — to cut wall
+    # time on big states and stay within the serverless time limit.
+    weights = build_measure_weights(profile) if not profile.is_empty else {}
+
+    def _mds() -> dict:
+        try:
+            return fetch_mds_measures_by_state(state)
+        except DataFetchError:
+            return {}
+
+    with ThreadPoolExecutor(max_workers=2) as ex:
+        fac_future = ex.submit(fetch_state_facilities, state)
+        mds_future = ex.submit(_mds) if weights else None
+        try:
+            result = fac_future.result()
+        except DataFetchError as e:
+            raise SearchError(502, str(e))
+        mds = mds_future.result() if mds_future else {}
+
     facilities, filter_notes = filter_facilities(
         result.facilities,
         min_stars=int(filters.get("minStars") or 0),
@@ -122,21 +138,13 @@ def run_search(payload: dict) -> dict:
     if not facilities:
         raise SearchError(404, "No facilities match those filters in this state.")
 
-    # 4. Condition-specific measures (no AI)
     condition_scores = None
-    if not profile.is_empty:
-        weights = build_measure_weights(profile)
-        if weights:
-            try:
-                mds = fetch_mds_measures_by_state(state)
-            except DataFetchError:
-                mds = {}
-            if mds:
-                benchmarks = compute_measure_benchmarks(mds)
-                condition_scores = {
-                    ccn: score_condition_match(fac_mds, weights, benchmarks)
-                    for ccn, fac_mds in mds.items()
-                }
+    if weights and mds:
+        benchmarks = compute_measure_benchmarks(mds)
+        condition_scores = {
+            ccn: score_condition_match(fac_mds, weights, benchmarks)
+            for ccn, fac_mds in mds.items()
+        }
 
     vulnerable = bool(profile.categories() & {"dementia", "mental_health"})
 
