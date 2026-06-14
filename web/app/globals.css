@@ -94,12 +94,18 @@ input:focus, select:focus { outline: none; border-color: var(--clay); box-shadow
 .chip:hover { border-color: var(--clay); }
 .chip.on { background: var(--clay); border-color: var(--clay); color: #fff; }
 .chip input { display: none; }
-.sev { display: inline-flex; gap: 4px; margin-left: 4px; }
+/* Segmented severity control: a darkened inset track on the selected chip.
+   Active = solid light pill (pops); inactive = ghost text (recedes). */
+.sev { display: inline-flex; gap: 3px; margin-left: 8px; padding: 2px; background: rgba(0,0,0,0.2); border-radius: 9px; }
 .sev button {
-  font-family: var(--font-body); font-size: 12px; border: 1px solid var(--line-strong);
-  background: var(--paper); color: var(--ink-soft); border-radius: 6px; padding: 3px 7px; cursor: pointer;
+  font-family: var(--font-body); font-size: 12px; font-weight: 600; line-height: 1;
+  border: none; background: transparent; color: rgba(255,255,255,0.78);
+  border-radius: 7px; padding: 5px 10px; cursor: pointer; transition: background .12s, color .12s;
 }
-.sev button.on { background: var(--clay-deep); border-color: var(--clay-deep); color: #fff; }
+.sev button:hover { color: #fff; }
+.sev button.on { background: var(--paper); color: var(--clay-deep); box-shadow: 0 1px 2px rgba(0,0,0,0.2); }
+.sev button:focus-visible { outline: 2px solid var(--paper); outline-offset: 1px; }
+.sev button:focus:not(:focus-visible) { outline: none; }
 
 /* buttons */
 .btn {
