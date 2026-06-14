@@ -157,7 +157,7 @@ def _tour_questions(r: RankedFacility) -> list[str]:
     return questions[:3]
 
 
-def _facility_section(i: int, r: RankedFacility) -> str:
+def _facility_section(i: int, r: RankedFacility, tour_questions: bool = True) -> str:
     f = r.facility
     rating = f"{f.overall_rating}/5 stars" if f.overall_rating > 0 else "not yet rated"
     lines = [
@@ -184,11 +184,14 @@ def _facility_section(i: int, r: RankedFacility) -> str:
         lines.append("**Red flags:**")
         lines.extend(f"  - {flag}" for flag in flags)
 
-    questions = _tour_questions(r)
-    if questions:
-        lines.append("")
-        lines.append("**Ask on your tour:**")
-        lines.extend(f"  - {q}" for q in questions)
+    # Tour questions are generic in the rule-based report; callers that offer an
+    # AI write-up (which tailors questions per facility) can omit them here.
+    if tour_questions:
+        questions = _tour_questions(r)
+        if questions:
+            lines.append("")
+            lines.append("**Ask on your tour:**")
+            lines.extend(f"  - {q}" for q in questions)
 
     return "\n".join(lines)
 
@@ -222,11 +225,15 @@ def build_data_report(
     budget_note: str = "",
     needs_summary: str = "",
     notice: str = "",
+    tour_questions: bool = True,
 ) -> str:
     """Build the full rule-based recommendation report (markdown, no AI).
 
     `notice` is shown verbatim at the top when set (e.g. an LLM-error message);
     otherwise a tip about enabling the AI report is shown instead.
+
+    `tour_questions` controls the generic "Ask on your tour" lists; set False
+    when an AI write-up will provide tailored questions instead.
     """
     if not ranked:
         return "No facilities to report on."
@@ -248,7 +255,7 @@ def build_data_report(
     lines.append("")
 
     for i, r in enumerate(ranked, start=1):
-        lines.append(_facility_section(i, r))
+        lines.append(_facility_section(i, r, tour_questions=tour_questions))
         lines.append("")
 
     lines.append(_top_pick_rationale(ranked))

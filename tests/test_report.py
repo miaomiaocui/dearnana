@@ -68,6 +68,13 @@ def test_report_generates_tour_question_for_weak_component():
     assert "turnover" in text.lower()  # staff_stability question
 
 
+def test_tour_questions_can_be_omitted():
+    text = build_data_report([_ranked()], tour_questions=False)
+    assert "Ask on your tour:" not in text
+    # the rest of the report is unaffected
+    assert "Strong on:" in text
+
+
 def test_report_includes_next_steps_and_top_pick():
     text = build_data_report([_ranked()], condition="dementia", budget=8000)
     assert "Best overall match" in text

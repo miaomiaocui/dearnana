@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "dearnana"
-version = "0.1.1"
+version = "0.1.2"
 description = "Find and rank nursing homes using CMS public data"
 readme = "README.md"
 license = "MIT"
