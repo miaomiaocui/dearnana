@@ -66,7 +66,7 @@ export default function Results({
     <div>
       <div className="results-head">
         <h2>
-          Top {facilities.length} near {query.address}
+          Top {facilities.length} near {query.city}, {query.state} {query.zip}
         </h2>
         <div className="toolbar">
           <button className="btn btn-ghost btn-sm" onClick={() => download("dearnana.csv", result.csv, "text/csv")}>

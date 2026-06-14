@@ -34,7 +34,7 @@ You can also exercise the pipeline directly without the server:
 
 ```bash
 DEARNANA_CACHE_DIR=/tmp/dn python -c "import sys; sys.path.insert(0,'api'); \
-  from search import run_search; print(run_search({'address':'Bellevue, WA','budget':8000}).keys())"
+  from search import run_search; print(run_search({'zip':'98008','budget':8000}).keys())"
 ```
 
 ## Deploy to Vercel (free)

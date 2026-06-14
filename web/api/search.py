@@ -8,6 +8,7 @@ user's API key — the browser sends that prompt to Anthropic directly.
 
 import json
 import os
+import re
 from concurrent.futures import ThreadPoolExecutor
 
 # Vercel's home dir is read-only; point the library's cache at a writable path
@@ -16,6 +17,8 @@ os.environ.setdefault("DEARNANA_CACHE_DIR", "/tmp/dearnana-cache")
 
 from http.server import BaseHTTPRequestHandler
 
+import zipcodes  # offline US ZIP -> lat/lng/state; no network, no rate limits
+
 from dearnana import (
     build_advisor_prompt,
     build_comparison_table,
@@ -23,7 +26,6 @@ from dearnana import (
     build_measure_weights,
     compute_measure_benchmarks,
     filter_facilities,
-    geocode_address,
     parse_condition,
     rank_facilities,
     score_condition_match,
@@ -77,11 +79,22 @@ def _build_profile(needs: list[dict], condition_text: str) -> NeedsProfile:
     return NeedsProfile(source="none")
 
 
+def _lookup_zip(zip_code: str) -> tuple[float, float, str, str]:
+    """Resolve a 5-digit US ZIP to (lat, lng, state, city) fully offline."""
+    zip_code = (zip_code or "").strip()
+    if not re.fullmatch(r"\d{5}", zip_code):
+        raise SearchError(400, "Please enter a 5-digit US ZIP code.")
+    matches = zipcodes.matching(zip_code)
+    if not matches:
+        raise SearchError(400, f"We couldn't find ZIP code {zip_code}. Please double-check it.")
+    m = matches[0]
+    return float(m["lat"]), float(m["long"]), m["state"], m["city"]
+
+
 def run_search(payload: dict) -> dict:
     """Pure pipeline function (no HTTP), so it is unit-testable directly."""
-    address = (payload.get("address") or "").strip()
-    if not address:
-        raise SearchError(400, "An address or area is required.")
+    lat, lng, state, city = _lookup_zip(payload.get("zip"))
+    zip_code = str(payload.get("zip")).strip()
     try:
         budget = float(payload.get("budget"))
     except (TypeError, ValueError):
@@ -97,13 +110,7 @@ def run_search(payload: dict) -> dict:
     condition_text = payload.get("conditionText") or ""
     filters = payload.get("filters") or {}
 
-    # 1. Geocode
-    try:
-        lat, lng, state = geocode_address(address)
-    except ValueError as e:
-        raise SearchError(400, str(e))
-
-    # 2. Care-needs profile (no AI)
+    # Care-needs profile (no AI)
     profile = _build_profile(needs, condition_text)
     condition = condition_text.strip() or profile.summary
 
@@ -180,7 +187,7 @@ def run_search(payload: dict) -> dict:
     # 8. Build outputs (all non-AI) + the optional AI prompt
     return {
         "query": {
-            "address": address, "state": state, "lat": lat, "lng": lng,
+            "zip": zip_code, "city": city, "state": state, "lat": lat, "lng": lng,
             "budget": budget, "radius": radius, "topN": top_n,
             "needs": sorted(profile.categories()), "filterNotes": filter_notes,
         },

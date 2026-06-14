@@ -4,7 +4,7 @@ import { useState } from "react";
 import { NEED_CATEGORIES, SEVERITY } from "@/lib/types";
 
 export interface SearchPayload {
-  address: string;
+  zip: string;
   budget: number;
   radius: number;
   topN: number;
@@ -26,7 +26,7 @@ export default function SearchForm({
   onSearch: (p: SearchPayload) => void;
   loading: boolean;
 }) {
-  const [address, setAddress] = useState("");
+  const [zip, setZip] = useState("");
   const [budget, setBudget] = useState("8000");
   const [radius, setRadius] = useState("25");
   const [topN, setTopN] = useState("5");
@@ -42,10 +42,13 @@ export default function SearchForm({
       return next;
     });
 
+  const zipValid = /^\d{5}$/.test(zip);
+
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
+    if (!zipValid) return;
     onSearch({
-      address: address.trim(),
+      zip,
       budget: parseFloat(budget) || 0,
       radius: parseFloat(radius) || 25,
       topN: parseInt(topN) || 5,
@@ -58,16 +61,19 @@ export default function SearchForm({
     <form className="panel" onSubmit={submit}>
       <div className="grid grid-2">
         <div className="field">
-          <label htmlFor="addr">Where are you looking?</label>
+          <label htmlFor="zip">Your ZIP code</label>
           <input
-            id="addr"
+            id="zip"
             type="text"
-            placeholder="e.g. Bellevue, WA 98008"
-            value={address}
-            onChange={(e) => setAddress(e.target.value)}
+            inputMode="numeric"
+            pattern="\d{5}"
+            maxLength={5}
+            placeholder="e.g. 94403"
+            value={zip}
+            onChange={(e) => setZip(e.target.value.replace(/\D/g, "").slice(0, 5))}
             required
           />
-          <span className="hint">A city, ZIP, or full address in the US.</span>
+          <span className="hint">5-digit US ZIP — we search outward from there.</span>
         </div>
         <div className="field">
           <label htmlFor="budget">Monthly budget</label>
@@ -147,7 +153,7 @@ export default function SearchForm({
       </div>
 
       <div style={{ marginTop: 26 }}>
-        <button className="btn btn-primary" type="submit" disabled={loading}>
+        <button className="btn btn-primary" type="submit" disabled={loading || !zipValid}>
           {loading ? (
             <>
               <span className="spin" />

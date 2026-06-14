@@ -1,1 +1,2 @@
 dearnana==0.1.1
+zipcodes>=1.2

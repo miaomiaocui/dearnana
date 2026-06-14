@@ -49,7 +49,8 @@ export interface RankedFacility {
 
 export interface SearchResult {
   query: {
-    address: string;
+    zip: string;
+    city: string;
     state: string;
     budget: number;
     radius: number;
