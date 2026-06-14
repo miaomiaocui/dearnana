@@ -13,6 +13,8 @@ DearNana searches the CMS (Centers for Medicare & Medicaid Services) public data
 
 **DearNana runs fully for free — no API key, no tokens.** AI is an optional final layer that rewrites the results into a plain-language report; everything else works the same with or without it.
 
+> **Web app:** a friendly browser version lives in [`web/`](web/) and deploys to Vercel's free tier. The full non-AI experience works with no key; the optional AI report uses your own Anthropic key, sent **directly from your browser to Anthropic — never to our server**. See [`web/README.md`](web/README.md).
+
 ### Features
 
 Works with **no API key, no tokens**:

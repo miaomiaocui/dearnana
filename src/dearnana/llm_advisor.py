@@ -125,6 +125,37 @@ def _format_facility(i: int, r: RankedFacility) -> str:
     return "\n".join(lines)
 
 
+def build_advisor_prompt(
+    ranked: list[RankedFacility],
+    condition: str,
+    budget: float,
+    budget_note: str = "",
+    needs_summary: str = "",
+) -> str:
+    """Build the full advisor prompt without calling any LLM.
+
+    Exposed so a caller (e.g. a web backend doing bring-your-own-key) can
+    obtain the exact prompt and send it to Anthropic itself, keeping the key
+    out of this process. generate_recommendation() builds the same string.
+    """
+    facilities_text = "\n\n".join(
+        _format_facility(i + 1, r) for i, r in enumerate(ranked)
+    )
+
+    needs_block = ""
+    if needs_summary:
+        needs_block = f"\n## Identified Care Needs\n{needs_summary}\n"
+
+    return ADVISOR_PROMPT.format(
+        condition=condition,
+        needs_summary=needs_block,
+        budget=budget,
+        budget_note=budget_note,
+        n=len(ranked),
+        facilities_text=facilities_text,
+    )
+
+
 def generate_recommendation(
     ranked: list[RankedFacility],
     condition: str,
@@ -141,22 +172,7 @@ def generate_recommendation(
     if provider is None:
         return build_data_report(ranked, condition, budget, budget_note, needs_summary)
 
-    facilities_text = "\n\n".join(
-        _format_facility(i + 1, r) for i, r in enumerate(ranked)
-    )
-
-    needs_block = ""
-    if needs_summary:
-        needs_block = f"\n## Identified Care Needs\n{needs_summary}\n"
-
-    prompt = ADVISOR_PROMPT.format(
-        condition=condition,
-        needs_summary=needs_block,
-        budget=budget,
-        budget_note=budget_note,
-        n=len(ranked),
-        facilities_text=facilities_text,
-    )
+    prompt = build_advisor_prompt(ranked, condition, budget, budget_note, needs_summary)
 
     text = provider.generate(prompt)
     if not text:

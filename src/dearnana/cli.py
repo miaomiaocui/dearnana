@@ -24,6 +24,7 @@ from dearnana.config import (
     STATE_MEDIAN_MONTHLY_COST,
 )
 from dearnana.errors import DataFetchError
+from dearnana.filters import filter_facilities
 from dearnana.export import (
     format_watchlist,
     load_watchlist,
@@ -33,7 +34,7 @@ from dearnana.export import (
 )
 from dearnana.geocode import geocode_address
 from dearnana.llm_advisor import generate_recommendation
-from dearnana.models import Facility, RankedFacility
+from dearnana.models import RankedFacility
 from dearnana.questionnaire import prompt_needs
 from dearnana.ranker import (
     compute_measure_benchmarks,
@@ -48,37 +49,6 @@ def _reports_dir() -> Path:
     if override:
         return Path(override)
     return Path.cwd() / "dearnana-reports"
-
-
-def _apply_filters(
-    facilities: list[Facility],
-    min_stars: int,
-    exclude_abuse: bool,
-    exclude_special_focus: bool,
-    sprinkler_only: bool,
-    independent_only: bool,
-) -> tuple[list[Facility], list[str]]:
-    """Drop facilities failing any active filter. Returns (kept, drop notes)."""
-    checks = [
-        (min_stars > 0, lambda f: f.overall_rating >= min_stars,
-         f"below {min_stars} CMS stars"),
-        (exclude_abuse, lambda f: not f.abuse_icon, "abuse-flagged"),
-        (exclude_special_focus, lambda f: not f.special_focus_status,
-         "on CMS Special Focus list"),
-        (sprinkler_only, lambda f: f.sprinkler_systems == "Yes",
-         "without full sprinkler coverage"),
-        (independent_only, lambda f: not f.chain_name, "chain-affiliated"),
-    ]
-    notes: list[str] = []
-    for active, predicate, label in checks:
-        if not active:
-            continue
-        before = len(facilities)
-        facilities = [f for f in facilities if predicate(f)]
-        removed = before - len(facilities)
-        if removed:
-            notes.append(f"{removed} {label}")
-    return facilities, notes
 
 
 def _format_facility_lines(i: int, r: RankedFacility) -> str:
@@ -224,9 +194,13 @@ def main(
         raise SystemExit(1)
 
     # Step 3b: Apply user filters
-    facilities, filter_notes = _apply_filters(
-        facilities, min_stars, exclude_abuse, exclude_special_focus,
-        sprinkler_only, independent_only,
+    facilities, filter_notes = filter_facilities(
+        facilities,
+        min_stars=min_stars,
+        exclude_abuse=exclude_abuse,
+        exclude_special_focus=exclude_special_focus,
+        sprinkler_only=sprinkler_only,
+        independent_only=independent_only,
     )
     if filter_notes:
         click.echo(f"  Filters removed: {'; '.join(filter_notes)} -> {len(facilities)} remain")

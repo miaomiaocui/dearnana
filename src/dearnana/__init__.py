@@ -11,6 +11,8 @@ from dearnana.comparison import build_comparison_table
 from dearnana.condition import NeedsProfile, build_measure_weights, parse_condition
 from dearnana.errors import DataFetchError
 from dearnana.export import load_watchlist, save_to_watchlist, to_csv, to_html
+from dearnana.filters import filter_facilities
+from dearnana.llm_advisor import build_advisor_prompt, generate_recommendation
 from dearnana.models import Facility, RankedFacility, StateFacilities, UserInput
 from dearnana.questionnaire import prompt_needs
 from dearnana.ranker import (
@@ -38,6 +40,9 @@ __all__ = [
     "geocode_address",
     "build_data_report",
     "build_comparison_table",
+    "build_advisor_prompt",
+    "generate_recommendation",
+    "filter_facilities",
     "prompt_needs",
     "to_csv",
     "to_html",

@@ -92,5 +92,7 @@ STATE_MEDIAN_MONTHLY_COST: dict[str, int] = {
 NATIONAL_MEDIAN_MONTHLY_COST = 9277
 
 # Cache
-CACHE_DIR = "~/.dearnana/cache"
+# Overridable for environments where ~ is read-only (e.g. serverless: point it
+# at a writable dir like /tmp/dearnana-cache via DEARNANA_CACHE_DIR).
+CACHE_DIR = os.environ.get("DEARNANA_CACHE_DIR", "~/.dearnana/cache")
 CACHE_TTL_HOURS = 24
